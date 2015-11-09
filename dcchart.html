@@ -1,0 +1,114 @@
+<html>
+    <head>
+      <link href="https://cdnjs.cloudflare.com/ajax/libs/dc/2.0.0-beta.20/dc.min.css" rel="stylesheet" type="text/css">
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js" charset="utf-8"></script>
+
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/crossfilter/1.3.12/crossfilter.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/dc/2.0.0-beta.20/dc.min.js"></script>
+    </head>
+    <body>
+    <div id="chart"></div>
+
+<script>
+    function randomDate(start, end) {
+            return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+    }
+    function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateData() {
+        var data = []
+        for (var i = 0; i < 1000; i++) {
+            data.push({"timestamp": randomDate(new Date(2014, 01, 01), new Date(2015, 12, 31)), "data": getRandomInt(10, 1000)})
+        }
+        return data.sort(function(a,b) { return a.timestamp - b.timestamp })
+    }
+
+    function generateCharts(data, aggregation) {
+        charts = []
+        for (var label in data) {
+            if (data.hasOwnProperty(label)) {
+                var ndx = crossfilter(data[label]);
+                var dim = ndx.dimension(function (d) { return d[aggregation] });
+
+                lengths = dim.group().reduceSum(function(d) { return d.data})
+                charts.push(dc.lineChart(chart)
+                                .group(lengths, label)
+                                .dimension(dim)
+                                .title((function(name) { return function (d) {
+                                    return name + '\n' + dayFormat(d.key) + '\n' + numberFormat(d.value);
+                                }})(label))
+                )
+            }
+        }
+        return charts
+    }
+
+    var dateFormat = d3.time.format.iso
+    var dayFormat = d3.time.format('%x')
+    var numberFormat = d3.format('d');
+    var chart = dc.compositeChart('#chart');
+    var data = {"label1": generateData(), "label2": generateData(),
+                "label3": generateData(), "label4": generateData(),
+                "label5": generateData()}
+    for (var label in data) {
+        if (data.hasOwnProperty(label)) {
+            data[label].forEach(function(d) {
+                d.dd = dateFormat.parse(d.timestamp);
+                d.hour = d3.time.hour(d.dd)
+                d.day = d3.time.day(d.dd)
+                d.month = d3.time.month(d.dd)
+            })
+        }
+    }
+
+    currentGroup = "month"
+    charts = generateCharts(data, currentGroup)
+
+    chart
+        .width(1000)
+        .height(400)
+        .zoomScale([1,800])
+        .zoomOutRestrict(false)
+        .transitionDuration(0)
+        .margins({top: 30, right: 50, bottom: 25, left: 50})
+        .mouseZoomable(true)
+        .x(d3.time.scale().domain([new Date(2014, 1, 1), new Date(2015, 11, 31)]))
+        .round(d3.time.month.round)
+        .xUnits(d3.time.months)
+        .elasticY(true)
+        .renderHorizontalGridLines(true)
+        .keyAccessor(function(d) {
+            return d.key;
+        })
+        .legend(dc.legend().x(900).y(10).itemHeight(13).gap(5))
+        .valueAccessor(function (d) {
+            return d.value;
+        })
+        .compose(charts)
+        .shareColors(true)
+        .shareTitle(false)
+        .on('zoomed', function(chart, filter) {
+            var range = chart.x().domain()
+            var diff = range[1] - range[0]
+            if (diff < 1000*3600*24*15) {
+                aggregate = "hour"
+            } else if (diff < 1000*3600*24*30*6) {
+                aggregate = "day"
+            } else {
+                aggregate = "month"
+            }
+            if (aggregate != currentGroup) {
+                charts = generateCharts(data, aggregate)
+                chart.compose(charts).render()
+                currentGroup = aggregate
+            }
+        })
+        .brushOn(false)
+
+    dc.renderAll();
+</script>
+    </body>
+</html>
+
